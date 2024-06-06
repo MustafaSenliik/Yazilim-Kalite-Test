@@ -1,0 +1,6 @@
+Flask
+Flask-SQLAlchemy
+pymysql
+prometheus_flask_exporter
+flask_cors
+prometheus_client

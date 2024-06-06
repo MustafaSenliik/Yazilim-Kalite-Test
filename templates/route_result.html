@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>İstanbulkart Dolum Noktası Bulma Uygulaması</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-top: 20px;
+        }
+        #map {
+            height: 500px;
+            width: 80%;
+            margin: 0 auto;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+        }
+        .info {
+            margin: 0 auto;
+            width: 80%;
+            text-align: left;
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .info p {
+            margin: 0;
+            color: #555;
+            font-size: 18px;
+        }
+        a {
+            display: inline-block;
+            padding: 10px 20px;
+            margin-top: 10px;
+            border: none;
+            background-color: #337ab7;
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+        a:hover {
+            background-color: #286090;
+        }
+        #directionsPanel, #locationsPanel, #clickDirectionsPanel {
+            width: 80%;
+            margin: 20px auto;
+            text-align: left;
+            background-color: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANPSC0RwsohmuBId_TUsbVIF15XGGIXIU&libraries=places"></script>
+    <script>
+        let map;
+        let markers = [];
+        let directionsService;
+        let directionsRenderer;
+        let greenRenderers = [];
+        let clickDirectionsRenderer;
+
+        function initMap() {
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                polylineOptions: {
+                    strokeColor: 'blue'
+                }
+            });
+            clickDirectionsRenderer = new google.maps.DirectionsRenderer({
+                polylineOptions: {
+                    strokeColor: 'red'
+                }
+            });
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: { lat: 41.0082, lng: 28.9784 } // İstanbul'un merkezi
+            });
+            directionsRenderer.setMap(map);
+            directionsRenderer.setPanel(document.getElementById('directionsPanel'));
+            clickDirectionsRenderer.setMap(map);
+            clickDirectionsRenderer.setPanel(document.getElementById('clickDirectionsPanel'));
+
+            const start = "{{ start_location }}";
+            const end = "{{ end_location }}";
+
+            const request = {
+                origin: start,
+                destination: end,
+                travelMode: 'DRIVING'
+            };
+
+            directionsService.route(request, function (result, status) {
+                if (status == 'OK') {
+                    directionsRenderer.setDirections(result);
+                    showNearbyStops(result.routes[0].legs[0].steps);
+                } else {
+                    console.error('Directions request failed due to ' + status);
+                }
+            });
+        }
+
+        function showNearbyStops(steps) {
+            fetch('/locations')
+                .then(response => response.json())
+                .then(locations => {
+                    const locationsPanel = document.getElementById('locationsPanel');
+                    locationsPanel.innerHTML = ''; // Clear previous locations
+
+                    steps.forEach(step => {
+                        const stepLatLng = step.end_location;
+                        const closestLocations = getClosestLocations(stepLatLng, locations, 8, 1);
+                        drawGreenRoutes(closestLocations);
+                    });
+                })
+                .catch(error => console.error('Error fetching locations:', error));
+        }
+
+        function getClosestLocations(point, locations, numClosest, radiusKm) {
+            locations.sort((a, b) => {
+                let distanceA = google.maps.geometry.spherical.computeDistanceBetween(point, new google.maps.LatLng(a.latitude, a.longitude));
+                let distanceB = google.maps.geometry.spherical.computeDistanceBetween(point, new google.maps.LatLng(b.latitude, b.longitude));
+                return distanceA - distanceB;
+            });
+            return locations.filter(location => {
+                const locLatLng = new google.maps.LatLng(parseFloat(location.latitude), parseFloat(location.longitude));
+                const distance = google.maps.geometry.spherical.computeDistanceBetween(point, locLatLng);
+                return distance <= radiusKm * 1000; // Convert km to meters
+            }).slice(0, numClosest);
+        }
+
+        function drawGreenRoutes(locations) {
+            let lastLocation = null;
+            locations.forEach(location => {
+                const locLatLng = new google.maps.LatLng(parseFloat(location.latitude), parseFloat(location.longitude));
+                const marker = new google.maps.Marker({
+                    position: locLatLng,
+                    map: map,
+                    title: location.terminal_id
+                });
+                markers.push(marker);
+
+                google.maps.event.addListener(marker, 'click', function() {
+                    calculateAndDisplayRoute(locLatLng);
+                });
+
+                if (lastLocation) {
+                    const greenRouteRequest = {
+                        origin: lastLocation,
+                        destination: locLatLng,
+                        travelMode: 'DRIVING'
+                    };
+
+                    directionsService.route(greenRouteRequest, function (result, status) {
+                        if (status == 'OK') {
+                            const greenRenderer = new google.maps.DirectionsRenderer({
+                                map: map,
+                                directions: result,
+                                polylineOptions: {
+                                    strokeColor: 'green'
+                                },
+                                suppressMarkers: true
+                            });
+                            greenRenderers.push(greenRenderer);
+                        } else {
+                            console.error('Green route request failed due to ' + status);
+                        }
+                    });
+                }
+                lastLocation = locLatLng;
+            });
+        }
+
+        function calculateAndDisplayRoute(latLng) {
+            const start = "{{ start_location }}";
+            const request = {
+                origin: start,
+                destination: latLng,
+                travelMode: 'DRIVING'
+            };
+            directionsService.route(request, function(result, status) {
+                if (status === 'OK') {
+                    clickDirectionsRenderer.setDirections(result);
+                } else {
+                    window.alert('Directions request failed due to ' + status);
+                }
+            });
+        }
+
+        function clearMarkers() {
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+            greenRenderers.forEach(renderer => renderer.setMap(null));
+            greenRenderers = [];
+            clickDirectionsRenderer.setMap(null);
+        }
+    </script>
+</head>
+<body onload="initMap()">
+    <h1>İstanbulkart Dolum Noktası Bulma Uygulaması</h1>
+    <div id="map"></div>
+    <div class="info">
+        <p>Mesafe: {{ distance }}</p>
+        <p>Süre: {{ duration }}</p>
+    </div>
+    <div id="clickDirectionsPanel"></div>
+    <div id="directionsPanel"></div>
+    <div id="locationsPanel"></div>
+    <a href="/route-form">Forma Geri Dön</a>
+</body>
+</html>

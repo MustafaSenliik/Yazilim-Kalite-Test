@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İstanbul Kart Dolum Noktaları</title>
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<h1>İstanbul Kart Dolum Noktaları</h1>
+
+<div>
+    <!-- Her ilçe için butonlar -->
+    <button onclick="showLocations('AVCILAR')">Avcılar</button>
+    <button onclick="showLocations('BAGCILAR')">Bağcılar</button>
+    <button onclick="showLocations('BAKIRKOY')">Bakırköy</button>
+    <button onclick="showLocations('BAYRAMPASA')">Bayrampaşa</button>
+    <button onclick="showLocations('BESIKTAS')">Beşiktaş</button>
+    <button onclick="showLocations('BEYKOZ')">Beykoz</button>
+    <button onclick="showLocations('BEYLIKDUZU')">Beylikdüzü</button>
+    <button onclick="showLocations('BEYOGLU')">Beyoğlu</button>
+    <button onclick="showLocations('BUYUKCEKMECE')">Büyükçekmece</button>
+    <button onclick="showLocations('CATALCA')">Çatalca</button>
+    <button onclick="showLocations('CEKMEKOY')">Çekmeköy</button>
+    <button onclick="showLocations('ESENLER')">Esenler</button>
+    <button onclick="showLocations('ESENYURT')">Esenyurt</button>
+    <button onclick="showLocations('EYUPSULTAN')">Eyüpsultan</button>
+    <button onclick="showLocations('FATIH')">Fatih</button>
+    <button onclick="showLocations('GAZIOSMANPASA')">Gaziosmanpaşa</button>
+    <button onclick="showLocations('GUNGOREN')">Güngören</button>
+    <button onclick="showLocations('KADIKOY')">Kadıköy</button>
+    <button onclick="showLocations('KAGITHANE')">Kâğıthane</button>
+    <button onclick="showLocations('KARTAL')">Kartal</button>
+    <button onclick="showLocations('KUCUKCEKMECE')">Küçükçekmece</button>
+    <button onclick="showLocations('MALTEPE')">Maltepe</button>
+    <button onclick="showLocations('PENDIK')">Pendik</button>
+    <button onclick="showLocations('SARIYER')">Sarıyer</button>
+    <button onclick="showLocations('SULTANBEYLI')">Sultanbeyli</button>
+    <button onclick="showLocations('SULTANGAZI')">Sultangazi</button>
+    <button onclick="showLocations('SILE')">Şile</button>
+    <button onclick="showLocations('SISLI')">Şişli</button>
+    <button onclick="showLocations('TUZLA')">Tuzla</button>
+    <button onclick="showLocations('UMRANIYE')">Ümraniye</button>
+    <button onclick="showLocations('USKUDAR')">Üsküdar</button>
+    <button onclick="showLocations('ZEYTINBURNU')">Zeytinburnu</button>
+
+    <!-- Tüm konumları göster butonu -->
+    <button onclick="showAllFilteredLocations()">Tüm Konumları Göster</button>
+
+    <!-- Kaldır butonu -->
+    <button onclick="clearMarkers()">İşaretlemeleri Kaldır</button>
+</div>
+
+<div id="map"></div>
+
+<div>
+    <a href="http://127.0.0.1:5010/route-form">Version2</a>
+</div>
+
+<script>
+    var map;
+    var markers = [];
+    var directionsRenderers = [];
+    var directionsService;
+
+    function initMap() {
+        // Harita oluşturma
+        map = new google.maps.Map(document.getElementById('map'), {
+            zoom: 11,
+            center: new google.maps.LatLng(41, 29) // İstanbul'un merkezi bir konumu
+        });
+        console.log("Harita başarıyla yüklendi.");
+
+        directionsService = new google.maps.DirectionsService();
+
+        // Haritaya tıklama olayı ekleyin
+        map.addListener('click', function(event) {
+            var lat = event.latLng.lat();
+            var lng = event.latLng.lng();
+            showNearestLocations(lat, lng);
+        });
+    }
+
+    function showLocations(townId) {
+        console.log("showLocations fonksiyonu çağrıldı, townId:", townId);
+        // Önceki işaretlemeleri kaldır
+        clearMarkers();
+
+        // AJAX ile verileri al
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "http://localhost:5010/locations/" + townId, true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState == 4) {
+                if (xhr.status == 200) {
+                    var locations = JSON.parse(xhr.responseText);
+                    console.log("Veriler alındı:", locations);
+                    // Her bir konum için işaretçi ekle
+                    locations.forEach(function(location) {
+                        var lat = parseFloat(location.latitude);
+                        var lng = parseFloat(location.longitude);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            var latLng = new google.maps.LatLng(lat, lng);
+                            var marker = new google.maps.Marker({
+                                position: latLng,
+                                map: map,
+                                title: location.terminal_id // İsteğe bağlı olarak, işaretçiye başlık ekle
+                            });
+                            markers.push(marker);
+                            console.log("İşaretçi eklendi:", marker);
+                        } else {
+                            console.error('Geçersiz enlem veya boylam:', location);
+                        }
+                    });
+                } else {
+                    console.error('Veri alırken hata oluştu: ' + xhr.status);
+                }
+            }
+        };
+        xhr.send();
+    }
+
+    function showAllFilteredLocations() {
+        console.log("showAllFilteredLocations fonksiyonu çağrıldı");
+        clearMarkers();
+
+        // AJAX ile tüm filtrelenmiş konumları al
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "http://localhost:5009/all-filtered-locations", true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState == 4) {
+                if (xhr.status == 200) {
+                    var locations = JSON.parse(xhr.responseText);
+                    console.log("Filtrelenmiş tüm konumlar alındı:", locations);
+                    // Her bir konum için işaretçi ekle
+                    locations.forEach(function(location) {
+                        var lat = parseFloat(location.latitude);
+                        var lng = parseFloat(location.longitude);
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            var latLng = new google.maps.LatLng(lat, lng);
+                            var marker = new google.maps.Marker({
+                                position: latLng,
+                                map: map,
+                                title: location.terminal_id // İsteğe bağlı olarak, işaretçiye başlık ekle
+                            });
+                            markers.push(marker);
+                            console.log("İşaretçi eklendi:", marker);
+                        } else {
+                            console.error('Geçersiz enlem veya boylam:', location);
+                        }
+                    });
+                } else {
+                    console.error('Veri alırken hata oluştu: ' + xhr.status);
+                }
+            }
+        };
+        xhr.send();
+    }
+
+    function showNearestLocations(lat, lng) {
+        // Önceki güzergahları kaldır
+        clearDirections();
+
+        // AJAX ile en yakın 3 lokasyonu al
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", `http://localhost:5009/nearest-locations?latitude=${lat}&longitude=${lng}`, true);
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState == 4) {
+                if (xhr.status == 200) {
+                    var locations = JSON.parse(xhr.responseText);
+                    console.log("En yakın lokasyonlar alındı:", locations);
+                    // Her bir konum için güzergah ekle
+                    locations.forEach(function(location) {
+                        var locLat = parseFloat(location.latitude);
+                        var locLng = parseFloat(location.longitude);
+                        if (!isNaN(locLat) && !isNaN(locLng)) {
+                            var request = {
+                                origin: { lat: lat, lng: lng },
+                                destination: { lat: locLat, lng: locLng },
+                                travelMode: 'DRIVING'
+                            };
+                            directionsService.route(request, function(result, status) {
+                                if (status == 'OK') {
+                                    var directionsRenderer = new google.maps.DirectionsRenderer({
+                                        map: map,
+                                        directions: result,
+                                        suppressMarkers: true,
+                                        polylineOptions: {
+                                            strokeColor: '#FF0000',
+                                            strokeOpacity: 1.0,
+                                            strokeWeight: 2
+                                        }
+                                    });
+                                    directionsRenderers.push(directionsRenderer);
+                                    console.log("Güzergah eklendi:", result);
+                                } else {
+                                    console.error('Güzergah oluşturulurken hata oluştu: ' + status);
+                                }
+                            });
+                        } else {
+                            console.error('Geçersiz enlem veya boylam:', location);
+                        }
+                    });
+                } else {
+                    console.error('Veri alırken hata oluştu: ' + xhr.status);
+                }
+            }
+        };
+        xhr.send();
+    }
+
+    function clearMarkers() {
+        // Tüm işaretçileri kaldır
+        markers.forEach(function(marker) {
+            marker.setMap(null);
+        });
+        markers = [];
+        console.log("Tüm işaretçiler kaldırıldı.");
+    }
+
+    function clearDirections() {
+        // Tüm güzergahları kaldır
+        directionsRenderers.forEach(function(renderer) {
+            renderer.setMap(null);
+        });
+        directionsRenderers = [];
+        console.log("Tüm güzergahlar kaldırıldı.");
+    }
+
+    window.initMap = initMap;
+</script>
+
+<!-- Google Maps API kütüphanesi -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANPSC0RwsohmuBId_TUsbVIF15XGGIXIU&callback=initMap" async defer></script>
+
+</body>
+</html>
